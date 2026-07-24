@@ -174,7 +174,7 @@ export default {
       return json({
         server: "runitonai-book",
         version: "0.2.0",
-        source: "https://github.com/StructLabs/runitonai-mcp",
+        source: "https://github.com/StructLabs-io/runitonai-mcp",
         transport: {
           streamable_http: "POST /mcp",
           sse_legacy: "GET /sse + POST /messages",
