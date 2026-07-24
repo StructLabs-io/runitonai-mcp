@@ -17,10 +17,7 @@ const STUB_METADATA: Record<string, StubMeta> = {
   find_section: { phase: "2", notes: "Semantic / keyword search across the ebook." },
   find_playbook: { phase: "2", notes: "Match a task description to a Chapter 7 playbook." },
   get_playbook: { phase: "2", notes: "Fetch a playbook by id." },
-  list_book_index: {
-    phase: "2",
-    notes: "Discovery surface: all chapters, sections, playbooks, IBs.",
-  },
+  // list_book_index went live 2026-07-24 (src/tools/list-book-index.ts).
   report_telemetry: {
     phase: "3",
     notes: "Aggregate event stream. Wired to Cloudflare Analytics Engine.",

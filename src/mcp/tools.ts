@@ -11,7 +11,7 @@
  *     carry (the model passes it as an argument; no header plumbing needed).
  *   - `Authorization: Bearer <token>` header — power-user path (legacy
  *     tokens; no email-based minting surface exists anymore).
- * `activate` and `get_implementation_block` are keyless (IBs are public —
+ * `activate`, `list_book_index`, and `get_implementation_block` are keyless (IBs are public —
  * they ship in full in the open-source repo). Per-credential / per-IP rate
  * limits also live here.
  *
@@ -23,6 +23,7 @@
 import { lookupChapter } from "../tools/lookup_chapter.ts";
 import { getImplementationBlock } from "../tools/get_implementation_block.ts";
 import { activate } from "../tools/activate.ts";
+import { listBookIndex } from "../tools/list-book-index.ts";
 import { stubResponse, STUBBED_TOOLS } from "../tools/stubs.ts";
 import { checkAndIncrement } from "../rate_limit.ts";
 import { extractBearerToken, verifyToken, sha256Hex } from "../auth.ts";
@@ -32,6 +33,7 @@ import type { Env, ToolDef, ToolResult } from "./types.ts";
 // Keyless tools are rate-limited per IP; gated tools per credential.
 const ACTIVATE_LIMIT_PER_HOUR = 30;
 const IB_LIMIT_PER_HOUR = 60;
+const INDEX_LIMIT_PER_HOUR = 60;
 const CHAPTER_LIMIT_PER_HOUR = 60;
 
 /**
@@ -51,14 +53,28 @@ export const TOOL_CATALOG: ToolDef[] = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "list_book_index",
+    description:
+      "Discovery: every valid chapter_id with its title — front matter, all chapters, AND " +
+      "all appendices (e.g. appendix-b-online-reference) — plus Implementation Block names " +
+      "per chapter. Call this whenever unsure which chapter_id to use. No authentication.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
     name: "lookup_chapter",
     description:
-      "Fetch a full chapter or a named section by slug. Buyer-gated: pass the reader's " +
-      "access_code (their Gumroad license key).",
+      "Fetch a full chapter or a named section by slug — works for appendices too. " +
+      "Buyer-gated: pass the reader's access_code (their Gumroad license key). Unsure of " +
+      "the slug? Call list_book_index first.",
     inputSchema: {
       type: "object",
       properties: {
-        chapter_id: { type: "string", description: "Manuscript slug, e.g. how-ai-actually-works." },
+        chapter_id: {
+          type: "string",
+          description:
+            "Manuscript slug, e.g. how-ai-actually-works or appendix-b-online-reference. " +
+            "Full list via list_book_index.",
+        },
         section: { type: "string", description: "Optional H2 section slug within the chapter." },
         access_code: {
           type: "string",
@@ -195,6 +211,11 @@ export async function dispatchToolCall(
     const limited = await ipRateLimit(env, headers, "activate", ACTIVATE_LIMIT_PER_HOUR);
     if (limited) return limited;
     return activate();
+  }
+  if (toolName === "list_book_index") {
+    const limited = await ipRateLimit(env, headers, "book_index", INDEX_LIMIT_PER_HOUR);
+    if (limited) return limited;
+    return listBookIndex();
   }
   if (toolName === "get_implementation_block") {
     const limited = await ipRateLimit(env, headers, "get_ib", IB_LIMIT_PER_HOUR);

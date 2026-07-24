@@ -19,7 +19,7 @@
 openapi: 3.1.0
 info:
   title: Run It on AI — companion content API
-  version: 0.3.0
+  version: 0.3.1
   description: |
     HTTP mirror of the Run It on AI MCP server (mcp.runitonai.com).
 
@@ -29,10 +29,13 @@ info:
     Flow for a fresh session:
       1. Call activate (no arguments) and follow the returned operating
          instructions for the rest of the conversation.
-      2. Implementation Blocks (the book's working exercises) via
+      2. Unsure which chapter_id to use? Call listBookIndex — it returns
+         every valid id with its title: front matter, all chapters, and
+         all appendices (e.g. appendix-b-online-reference).
+      3. Implementation Blocks (the book's working exercises) via
          getImplementationBlock — free to call, no access code.
-      3. Chapter prose via getChapter — requires access_code: the Gumroad
-         license key on the buyer's receipt (format
+      4. Chapter and appendix prose via getChapter — requires access_code:
+         the Gumroad license key on the buyer's receipt (format
          XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX). Ask the user for it once,
          then send it on every getChapter call.
 
@@ -43,6 +46,42 @@ info:
 servers:
   - url: https://mcp.runitonai.com
 paths:
+  /v1/book-index:
+    get:
+      operationId: listBookIndex
+      summary: List every valid chapter_id (chapters AND appendices)
+      description: >
+        Call this when unsure which chapter_id to use — it returns every
+        fetchable id with its title, including front matter, all chapters,
+        and all appendices (e.g. appendix-b-online-reference), plus the
+        Implementation Block names available per chapter. No authentication.
+      responses:
+        "200":
+          description: The book's id catalog, in book order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chapters:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        chapter_id:
+                          type: string
+                          description: Valid id for getChapter.
+                        title:
+                          type: string
+                        implementation_blocks:
+                          type: array
+                          description: IB names usable with getImplementationBlock.
+                          items:
+                            type: string
+                  usage_hint:
+                    type: string
+        "429":
+          $ref: "#/components/responses/RateLimited"
   /v1/activate:
     post:
       operationId: activate
@@ -160,12 +199,14 @@ paths:
   /v1/chapter:
     post:
       operationId: getChapter
-      summary: Fetch chapter content (requires access_code)
+      summary: Fetch chapter or appendix content (requires access_code)
       description: >
-        Returns a full chapter, or one named section, of the ebook. Requires
-        the buyer's access_code — the Gumroad license key from their Run It
-        on AI receipt. If the user has not provided it yet, ask for it, then
-        send it on every getChapter call.
+        Returns a full chapter or appendix, or one named section, of the
+        ebook — appendices are fetched exactly like chapters (e.g.
+        chapter_id appendix-b-online-reference). Requires the buyer's
+        access_code — the Gumroad license key from their Run It on AI
+        receipt. If the user has not provided it yet, ask for it, then send
+        it on every getChapter call.
       requestBody:
         required: true
         content:
@@ -176,7 +217,34 @@ paths:
               properties:
                 chapter_id:
                   type: string
-                  description: Manuscript slug, e.g. how-ai-actually-works.
+                  description: >
+                    Manuscript slug, e.g. how-ai-actually-works or
+                    appendix-b-online-reference. All valid ids are in the
+                    enum below; listBookIndex returns them with titles.
+                  # BEGIN-GENERATED-CHAPTER-IDS (scripts/build-openapi.ts; do not hand-edit)
+                  enum:
+                    - advance-praise
+                    - copyright
+                    - foreword
+                    - tldr
+                    - how-to-read
+                    - common-terms
+                    - introduction
+                    - how-ai-actually-works
+                    - before-you-build-anything
+                    - the-ai-tool-landscape
+                    - ai-harnesses
+                    - the-glue
+                    - agents-in-claude-code
+                    - common-playbooks
+                    - appendix-a-glossary
+                    - appendix-b-online-reference
+                    - appendix-c-automation-ideas
+                    - appendix-d-automation-failure-lessons
+                    - appendix-e-reader-interview
+                    - appendix-f-context-document-interview
+                    - references
+                  # END-GENERATED-CHAPTER-IDS
                 section:
                   type: string
                   description: Optional H2 section slug within the chapter.

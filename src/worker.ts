@@ -15,6 +15,7 @@
  *                                   than over the long-lived stream — works
  *                                   for Claude Code's SSE client, which polls
  *                                   for the POST result).
+ *   GET  /v1/book-index             Flat mirror: chapter/appendix id catalog
  *   POST /v1/activate               Flat mirror: {} -> operating instructions
  *   POST /v1/chapter                Flat mirror: { chapter_id, section?,
  *                                   access_code? } -> lookup_chapter
@@ -182,6 +183,16 @@ export default {
     // tool args as top-level kwargs (UnrecognizedKwargsError, observed live
     // 2026-07-24). These flat endpoints give it one fully-specified body per
     // operation. Same dispatcher underneath — auth/rate limits unchanged.
+    // GET variant for the id catalog (no body needed; Actions-friendly).
+    if (url.pathname === "/v1/book-index" && request.method === "GET") {
+      const result = await dispatchToolCall("list_book_index", {}, env, request.headers);
+      if (result.ok) return json(result.data);
+      return json(
+        { error: result.error, ...result.details },
+        { status: flatErrorStatus(result.error) },
+      );
+    }
+
     const flatTool = FLAT_TOOL_ROUTES[url.pathname];
     if (flatTool && request.method === "POST") {
       let body: Record<string, unknown>;
@@ -237,6 +248,7 @@ export default {
         },
         http_mirror: {
           openapi: "GET /openapi.yaml",
+          book_index: "GET /v1/book-index",
           activate: "POST /v1/activate",
           chapter: "POST /v1/chapter",
           implementation_block: "POST /v1/implementation-block",
