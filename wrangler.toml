@@ -1,0 +1,36 @@
+# Cloudflare Worker — Run It on AI MCP server (mcp.runitonai.com).
+#
+# This is the deployable config for the public source release. KV namespace
+# ids are placeholders: create your own namespaces with
+#   wrangler kv namespace create BUYERS
+#   wrangler kv namespace create RATE_LIMIT
+# and paste the returned ids below if you want to self-host the shell.
+
+name = "runitonai-mcp"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+main = "./src/worker.ts"
+
+# Bundle the OpenAPI document as text so worker.ts can serve it verbatim at
+# GET /openapi.yaml (see src/types/yaml.d.ts for the matching TS shim).
+[[rules]]
+type = "Text"
+globs = ["**/*.yaml"]
+fallthrough = true
+
+# Buyer allowlist: hashed emails (email fallback) and hashed license keys
+# (the license:… entries written by src/license.ts).
+[[kv_namespaces]]
+binding = "BUYERS"
+id = "REPLACE_WITH_YOUR_BUYERS_KV_ID"
+preview_id = "REPLACE_WITH_YOUR_BUYERS_KV_ID"
+
+# Per-credential rate-limit counters. Sliding 1-hour windows.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "REPLACE_WITH_YOUR_RATE_LIMIT_KV_ID"
+preview_id = "REPLACE_WITH_YOUR_RATE_LIMIT_KV_ID"
+
+# Secrets (set out-of-band via `wrangler secret put`, never in this file):
+#   SESSION_SECRET       — HMAC key for the email-fallback bearer tokens.
+#   GUMROAD_SYNC_SECRET  — optional shared secret for /gumroad/license-sync.

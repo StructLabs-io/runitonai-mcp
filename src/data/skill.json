@@ -1,0 +1,6 @@
+{
+  "name": "run-it-on-ai",
+  "version": "0.0.0-placeholder",
+  "generated_from": "mcp-server/SKILL.md (private; compiled in at deploy)",
+  "instructions": "Placeholder. The companion's operating instructions are part of the book and are compiled into the deployed Worker from the private manuscript repo. The live server returns them from the `activate` tool."
+}

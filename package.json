@@ -1,0 +1,17 @@
+{
+  "name": "runitonai-mcp",
+  "version": "0.2.0",
+  "private": true,
+  "description": "The complete server behind the Run It on AI reading companion (mcp.runitonai.com). MCP + HTTP mirror on a Cloudflare Worker, gated by Gumroad license key.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "@types/node": "^22.5.0",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.78.0"
+  }
+}
