@@ -203,12 +203,11 @@ paths:
       operationId: getChapter
       summary: Fetch chapter or appendix content (requires access_code)
       description: >
-        Returns a full chapter or appendix, or one named section, of the
-        ebook — appendices are fetched exactly like chapters (e.g.
-        chapter_id appendix-b-online-reference). Requires the buyer's
-        access_code — the Gumroad license key from their Run It on AI
-        receipt. If the user has not provided it yet, ask for it, then send
-        it on every getChapter call.
+        Returns a full chapter or appendix (e.g. chapter_id
+        appendix-b-online-reference), or one named section. Requires
+        access_code — the Gumroad license key on the buyer's Run It on AI
+        receipt. Ask the user for it once, then send it on every getChapter
+        call.
       requestBody:
         required: true
         content:
