@@ -24,7 +24,9 @@ info:
     HTTP mirror of the Run It on AI MCP server (mcp.runitonai.com).
 
     Serves the ebook companion's operating instructions and Implementation
-    Blocks (both keyless), plus buyer-gated chapter content.
+    Blocks (both keyless), plus buyer-gated chapter content. The book has
+    SEVEN chapters (chapter 7 = Common Playbooks, id common-playbooks) plus
+    front matter and appendices — all fetchable via getChapter.
 
     Flow for a fresh session:
       1. Call activate (no arguments) and follow the returned operating
