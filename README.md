@@ -23,9 +23,8 @@ store, or forward it:**
 - Your conversations with your AI.
 - Your files, documents, or anything on your machine.
 - Your name.
-- Your email, unless you choose the email fallback — and even then it is
-  stored only as a one-way hash, never as readable text
-  ([`src/tools/verify_buyer.ts`](src/tools/verify_buyer.ts)).
+- Your email. Search this repository for an email field: there is none.
+  No tool, no endpoint, no code path accepts one.
 - The picture your AI forms of you while you work. That stays inside your
   AI, on your side.
 
@@ -40,6 +39,11 @@ Your credential is the **license key** on your Gumroad receipt (a code like
 person. The server checks it against Gumroad, caches a hash of it for a day,
 and rate-limits it. Refunded or disabled keys stop working. See
 [`src/license.ts`](src/license.ts) — the whole mechanism is one file.
+
+Only chapter text needs the key. The companion's operating instructions
+(`activate`) and every Implementation Block — the book's working exercises —
+are served without any credential at all; the exercises are also published
+right here in [`implementation-blocks/`](implementation-blocks/).
 
 ## Connect it
 
@@ -75,7 +79,7 @@ url = "https://mcp.runitonai.com/mcp"
 |---|---|
 | `src/worker.ts` | The Cloudflare Worker: routing, transports, the Gumroad sync endpoint |
 | `src/license.ts` | License-key verification and caching (the access gate) |
-| `src/auth.ts` | Token signing for the email fallback (hashed emails only) |
+| `src/auth.ts` | Verification of legacy bearer tokens (nothing mints new ones) |
 | `src/rate_limit.ts` | Per-key rate limiting |
 | `src/mcp/` | MCP protocol plumbing (tool catalog, dispatch, transports) |
 | `src/tools/` | The tools your AI can call |
@@ -88,6 +92,12 @@ instructions). Both are generated from the book manuscript at deploy time.
 The book's prose is the product, so it is not in the public repo — but the
 code that serves it is all here, and the Implementation Blocks (the working
 exercises) are published in full in `implementation-blocks/`.
+
+Note for contributors: everything in this repo is generated from the
+private manuscript repo by a sync script, and a pre-commit hook there
+re-syncs it on every relevant change. The Implementation Blocks live in the
+book's manuscript; the copies here are build artifacts — never edit them
+here, they will be overwritten.
 
 ## Run it yourself
 

@@ -1,28 +1,19 @@
 /**
- * Auth helpers.
+ * Auth helpers: bearer-token VERIFICATION plus shared hashing utilities.
  *
- * Mirrors the cookie-signing approach used by site/src/worker.ts so MCP-issued
- * tokens and ebook-Worker-issued cookies share a verification surface. Both
- * Workers use HMAC-SHA256 over a JSON payload, keyed by the SESSION_SECRET set
- * via `wrangler secret put`.
+ * This Worker no longer mints tokens — the email-gate tool (verify_buyer)
+ * was removed 2026-07-24 so that no code path here can receive an email.
+ * verifyToken remains so previously issued 90-day tokens keep working for
+ * power users until they expire; the access code (Gumroad license key,
+ * src/license.ts) is the credential going forward.
  *
- * Token shape (base64url-encoded):
+ * Token shape (base64url-encoded), HMAC-SHA256 keyed by SESSION_SECRET:
  *
  *   <base64url(JSON.stringify(payload))>.<base64url(hmac-sha256(payload))>
- *
- * Payload:
- *
- *   { sub: <sha256(email)>, iat: <epoch_ms>, exp: <epoch_ms>, src: "mcp" }
- *
- * The ebook Worker may need a small change later to recognise tokens with
- * src="mcp" alongside its existing src="cookie" tokens. For Phase 1 the MCP
- * Worker only verifies its own tokens.
  */
 
-const TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-
 export interface TokenPayload {
-  sub: string;       // sha256 hex of normalized email
+  sub: string;       // opaque subject hash (legacy tokens: sha256 of email)
   iat: number;       // epoch ms issued-at
   exp: number;       // epoch ms expiry
   src: "mcp";        // origin tag, distinguishes from ebook Worker's "cookie"
@@ -31,13 +22,6 @@ export interface TokenPayload {
 // ---------------------------------------------------------------------------
 // Base64URL helpers (Workers do not ship a base64url codec)
 // ---------------------------------------------------------------------------
-
-function bufToBase64Url(buf: ArrayBuffer | Uint8Array): string {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let bin = "";
-  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i] ?? 0);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 
 function base64UrlToBytes(s: string): Uint8Array {
   const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
@@ -52,10 +36,6 @@ function base64UrlToBytes(s: string): Uint8Array {
 // Hashing
 // ---------------------------------------------------------------------------
 
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
 export async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -67,12 +47,8 @@ export async function sha256Hex(input: string): Promise<string> {
   return hex;
 }
 
-export async function sha256(input: string): Promise<string> {
-  return sha256Hex(input);
-}
-
 // ---------------------------------------------------------------------------
-// HMAC signing
+// HMAC verification
 // ---------------------------------------------------------------------------
 
 async function importHmacKey(secret: string): Promise<CryptoKey> {
@@ -85,39 +61,14 @@ async function importHmacKey(secret: string): Promise<CryptoKey> {
   );
 }
 
-async function hmacSign(secret: string, data: string): Promise<string> {
-  const key = await importHmacKey(secret);
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
-  return bufToBase64Url(sig);
-}
-
 async function hmacVerify(secret: string, data: string, sig: string): Promise<boolean> {
   const key = await importHmacKey(secret);
   return crypto.subtle.verify("HMAC", key, base64UrlToBytes(sig), new TextEncoder().encode(data));
 }
 
 // ---------------------------------------------------------------------------
-// Token mint + verify
+// Token verify (minting removed with the email gate, 2026-07-24)
 // ---------------------------------------------------------------------------
-
-export async function mintToken(secret: string, emailHash: string): Promise<{
-  token: string;
-  expires_at: string;
-}> {
-  const now = Date.now();
-  const payload: TokenPayload = {
-    sub: emailHash,
-    iat: now,
-    exp: now + TOKEN_TTL_MS,
-    src: "mcp",
-  };
-  const encoded = bufToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
-  const sig = await hmacSign(secret, encoded);
-  return {
-    token: `${encoded}.${sig}`,
-    expires_at: new Date(payload.exp).toISOString(),
-  };
-}
 
 export interface VerifiedToken {
   ok: true;

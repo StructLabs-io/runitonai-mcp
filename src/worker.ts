@@ -15,7 +15,6 @@
  *                                   than over the long-lived stream — works
  *                                   for Claude Code's SSE client, which polls
  *                                   for the POST result).
- *   POST /v1/verify_buyer           HTTP mirror: { email }      -> token
  *   POST /v1/tools/call             HTTP mirror: JSON-RPC tools/call envelope
  *   GET  /v1/tools/list             HTTP mirror: tools/list envelope
  *   GET  /openapi.yaml              OpenAPI 3.1 doc for the /v1 mirror (this
@@ -26,23 +25,23 @@
  *                                   touching) the site Worker's Ping URL.
  *   GET  /healthz                   simple healthcheck
  *
- * The HTTP mirror exists so harnesses without MCP support (e.g. custom GPTs,
- * see plan §7) can reach the same surface. Phase 1 ships these specced; the
- * full OpenAPI document lands in Phase 3 when ChatGPT path activates.
+ * The HTTP mirror exists so harnesses without MCP support (e.g. ChatGPT
+ * Custom GPT Actions) can reach the same surface; /openapi.yaml describes it.
  *
  * Bindings (wrangler.toml):
- *   BUYERS         KV namespace — shared with site/ Worker
- *   RATE_LIMIT     KV namespace — per-token / per-email counters
+ *   BUYERS         KV namespace — shared with site/ Worker (hashed license
+ *                  keys under license:…; the site's hashed-email entries
+ *                  coexist but are not read here anymore)
+ *   RATE_LIMIT     KV namespace — per-credential / per-IP counters
  *
  * Secrets (wrangler secret put):
- *   SESSION_SECRET — HMAC-SHA256 key. MUST match the site/ Worker so tokens
- *                    issued here verify there and vice versa.
+ *   SESSION_SECRET      — HMAC-SHA256 key for verifying legacy bearer tokens.
+ *   GUMROAD_SYNC_SECRET — optional; gates /gumroad/license-sync.
  */
 
 import type { Env, JsonRpcRequest } from "./mcp/types.ts";
 import { TOOL_CATALOG, dispatchToolCall } from "./mcp/tools.ts";
 import { openSseStream, handleSsePost, handleJsonRpc } from "./mcp/sse.ts";
-import { verifyBuyer } from "./tools/verify_buyer.ts";
 import { mirrorLicenseEvent } from "./license.ts";
 import { checkAndIncrement } from "./rate_limit.ts";
 import { sha256Hex } from "./auth.ts";
@@ -140,18 +139,9 @@ export default {
       return handleSsePost(request, env);
     }
 
-    // --- HTTP mirror: verify_buyer -----------------------------------------
-    if (url.pathname === "/v1/verify_buyer" && request.method === "POST") {
-      let body: { email?: string };
-      try {
-        body = await request.json();
-      } catch {
-        return json({ error: "invalid_json" }, { status: 400 });
-      }
-      const result = await verifyBuyer({ email: body.email ?? "" }, env);
-      if (result.ok) return json(result.data);
-      return json({ error: result.error, ...result.details }, { status: 400 });
-    }
+    // NOTE: /v1/verify_buyer was removed 2026-07-24 along with the email
+    // gate. No endpoint on this Worker accepts an email — that is the
+    // load-bearing fact behind the "you never give us your email" claim.
 
     // --- HTTP mirror: tools/list -------------------------------------------
     if (url.pathname === "/v1/tools/list" && request.method === "GET") {
@@ -191,7 +181,6 @@ export default {
         },
         http_mirror: {
           openapi: "GET /openapi.yaml",
-          verify_buyer: "POST /v1/verify_buyer",
           tools_list: "GET /v1/tools/list",
           tools_call: "POST /v1/tools/call",
         },

@@ -15,20 +15,20 @@ info:
   description: |
     HTTP mirror of the Run It on AI MCP server (mcp.runitonai.com).
 
-    Serves the ebook companion's operating instructions (unauthenticated)
-    and buyer-gated book content: chapters and Implementation Blocks.
+    Serves the ebook companion's operating instructions and Implementation
+    Blocks (both keyless), plus buyer-gated chapter content.
 
-    To access gated content, include `access_code` in the tool-call
-    `arguments` — the Gumroad license key shown on the buyer's receipt
-    (format XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX). Ask the user for it once,
-    then pass it on every content call. Never send the user's email, name,
-    or conversation content; none of it is needed or wanted.
+    To access gated content (lookup_chapter), include `access_code` in the
+    tool-call `arguments` — the Gumroad license key shown on the buyer's
+    receipt (format XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX). Ask the user for
+    it once, then pass it on every gated call. Never send the user's email,
+    name, or conversation content; no endpoint accepts any of it.
 
     Recommended flow for a fresh session:
       1. POST /v1/tools/call {"name": "activate", "arguments": {}} and follow
          the returned operating instructions.
-      2. For content, call lookup_chapter / get_implementation_block with
-         the user's access_code in arguments.
+      2. Implementation Blocks: get_implementation_block, no access code.
+      3. Chapter content: lookup_chapter with the user's access_code.
   contact:
     url: https://runitonai.com
 servers:
@@ -60,11 +60,11 @@ paths:
       operationId: callTool
       summary: Call a tool by name
       description: >
-        Invoke one tool. Content tools (lookup_chapter,
-        get_implementation_block) require `access_code` inside `arguments` —
-        the buyer's Gumroad license key. The `activate` tool requires no
-        authentication and returns the companion's operating instructions;
-        call it first in a fresh session.
+        Invoke one tool. `lookup_chapter` (chapter prose) requires
+        `access_code` inside `arguments` — the buyer's Gumroad license key.
+        `activate` (operating instructions) and `get_implementation_block`
+        (public Implementation Blocks) require no authentication; call
+        `activate` first in a fresh session.
       requestBody:
         required: true
         content:
@@ -80,12 +80,12 @@ paths:
                     - activate
                     - lookup_chapter
                     - get_implementation_block
-                    - verify_buyer
                 arguments:
                   type: object
                   description: >
-                    Tool arguments per the tool's inputSchema. For content
-                    tools, include access_code (the reader's license key).
+                    Tool arguments per the tool's inputSchema. For
+                    lookup_chapter, include access_code (the reader's
+                    license key).
                   additionalProperties: true
             examples:
               activate:
@@ -101,13 +101,12 @@ paths:
                     chapter_id: how-ai-actually-works
                     access_code: XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX
               implementation_block:
-                summary: Fetch an Implementation Block
+                summary: Fetch an Implementation Block (no auth needed)
                 value:
                   name: get_implementation_block
                   arguments:
                     chapter_id: before-you-build-anything
                     name: pre-automation-discipline
-                    access_code: XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX
       responses:
         "200":
           description: Tool result payload (shape varies per tool).
@@ -121,50 +120,6 @@ paths:
             Structured error: unauthorized (bad/missing access_code),
             rate_limited, invalid_input, chapter_not_found, ib_not_found,
             not_implemented (stub tools), or invalid_json.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResult"
-  /v1/verify_buyer:
-    post:
-      operationId: verifyBuyer
-      summary: "Fallback: exchange purchase email for a bearer token"
-      description: >
-        Legacy/power-user gate for readers who cannot find their license key.
-        Exchanges the ebook purchase email for a 90-day signed token, which
-        must then be sent as `Authorization: Bearer <token>` on tool calls —
-        a header most chat clients cannot set, which is why access_code is
-        the primary path. Prefer access_code; use this only when the reader
-        is stuck.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email]
-              properties:
-                email:
-                  type: string
-                  format: email
-                  description: The email used to buy the ebook.
-      responses:
-        "200":
-          description: Verified buyer; signed session token.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-                  expires_at:
-                    type: string
-                    format: date-time
-                  source:
-                    type: string
-        "400":
-          description: not_found (not a buyer), rate_limited, or invalid_input.
           content:
             application/json:
               schema:
