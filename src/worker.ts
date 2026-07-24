@@ -15,7 +15,17 @@
  *                                   than over the long-lived stream — works
  *                                   for Claude Code's SSE client, which polls
  *                                   for the POST result).
+ *   POST /v1/activate               Flat mirror: {} -> operating instructions
+ *   POST /v1/chapter                Flat mirror: { chapter_id, section?,
+ *                                   access_code? } -> lookup_chapter
+ *   POST /v1/implementation-block   Flat mirror: { chapter_id, name? } ->
+ *                                   get_implementation_block
  *   POST /v1/tools/call             HTTP mirror: JSON-RPC tools/call envelope
+ *                                   (programmatic users; NOT in the OpenAPI
+ *                                   doc — GPT Actions choke on the nested
+ *                                   free-form `arguments` object, emitting
+ *                                   tool args as top-level kwargs and dying
+ *                                   with UnrecognizedKwargsError)
  *   GET  /v1/tools/list             HTTP mirror: tools/list envelope
  *   GET  /openapi.yaml              OpenAPI 3.1 doc for the /v1 mirror (this
  *                                   is what a ChatGPT Custom GPT imports)
@@ -53,6 +63,29 @@ const CORS_HEADERS: HeadersInit = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "86400",
 };
+
+// Flat mirror path -> tool name. Bodies pass straight through as tool args.
+const FLAT_TOOL_ROUTES: Record<string, string> = {
+  "/v1/activate": "activate",
+  "/v1/chapter": "lookup_chapter",
+  "/v1/implementation-block": "get_implementation_block",
+};
+
+/** Meaningful HTTP statuses for the flat mirrors (tools/call keeps its 400s). */
+function flatErrorStatus(error: string): number {
+  switch (error) {
+    case "unauthorized":
+      return 401;
+    case "rate_limited":
+      return 429;
+    case "chapter_not_found":
+    case "ib_not_found":
+    case "unknown_tool":
+      return 404;
+    default:
+      return 400;
+  }
+}
 
 function json(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -143,6 +176,29 @@ export default {
     // gate. No endpoint on this Worker accepts an email — that is the
     // load-bearing fact behind the "you never give us your email" claim.
 
+    // --- Flat per-tool mirrors (the GPT Actions surface) --------------------
+    // ChatGPT's Actions runtime cannot reliably drive the generic tools/call
+    // envelope: with a free-form nested `arguments` schema the model emits
+    // tool args as top-level kwargs (UnrecognizedKwargsError, observed live
+    // 2026-07-24). These flat endpoints give it one fully-specified body per
+    // operation. Same dispatcher underneath — auth/rate limits unchanged.
+    const flatTool = FLAT_TOOL_ROUTES[url.pathname];
+    if (flatTool && request.method === "POST") {
+      let body: Record<string, unknown>;
+      try {
+        const text = await request.text();
+        body = text.trim() === "" ? {} : (JSON.parse(text) as Record<string, unknown>);
+      } catch {
+        return json({ error: "invalid_json" }, { status: 400 });
+      }
+      const result = await dispatchToolCall(flatTool, body, env, request.headers);
+      if (result.ok) return json(result.data);
+      return json(
+        { error: result.error, ...result.details },
+        { status: flatErrorStatus(result.error) },
+      );
+    }
+
     // --- HTTP mirror: tools/list -------------------------------------------
     if (url.pathname === "/v1/tools/list" && request.method === "GET") {
       return json({ tools: TOOL_CATALOG });
@@ -181,6 +237,9 @@ export default {
         },
         http_mirror: {
           openapi: "GET /openapi.yaml",
+          activate: "POST /v1/activate",
+          chapter: "POST /v1/chapter",
+          implementation_block: "POST /v1/implementation-block",
           tools_list: "GET /v1/tools/list",
           tools_call: "POST /v1/tools/call",
         },

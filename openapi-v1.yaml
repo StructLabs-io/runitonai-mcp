@@ -4,142 +4,250 @@
 # (and anything else that speaks plain HTTP instead of MCP). Served live at
 # GET https://mcp.runitonai.com/openapi.yaml.
 #
+# Design note (2026-07-24): only the FLAT per-tool endpoints are documented
+# here. The generic POST /v1/tools/call envelope still exists for
+# programmatic users but is deliberately absent from this doc — GPT Actions
+# cannot reliably fill a free-form nested `arguments` object (the model
+# emits tool args as top-level kwargs -> UnrecognizedKwargsError, observed
+# in live testing).
+#
 # Auth model: the reader's access code — the Gumroad license key from their
-# receipt — travels INSIDE tool-call arguments (`access_code`), not in a
-# header. That is deliberate: it is the only credential every AI chat client
-# can carry, and it identifies a purchase, not a person. No PII required.
+# receipt — travels as a body field on /v1/chapter, not in a header. That is
+# deliberate: it is the only credential every AI chat client can carry, and
+# it identifies a purchase, not a person. No PII required, no endpoint
+# accepts any.
 openapi: 3.1.0
 info:
   title: Run It on AI — companion content API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     HTTP mirror of the Run It on AI MCP server (mcp.runitonai.com).
 
     Serves the ebook companion's operating instructions and Implementation
     Blocks (both keyless), plus buyer-gated chapter content.
 
-    To access gated content (lookup_chapter), include `access_code` in the
-    tool-call `arguments` — the Gumroad license key shown on the buyer's
-    receipt (format XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX). Ask the user for
-    it once, then pass it on every gated call. Never send the user's email,
-    name, or conversation content; no endpoint accepts any of it.
+    Flow for a fresh session:
+      1. Call activate (no arguments) and follow the returned operating
+         instructions for the rest of the conversation.
+      2. Implementation Blocks (the book's working exercises) via
+         getImplementationBlock — free to call, no access code.
+      3. Chapter prose via getChapter — requires access_code: the Gumroad
+         license key on the buyer's receipt (format
+         XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX). Ask the user for it once,
+         then send it on every getChapter call.
 
-    Recommended flow for a fresh session:
-      1. POST /v1/tools/call {"name": "activate", "arguments": {}} and follow
-         the returned operating instructions.
-      2. Implementation Blocks: get_implementation_block, no access code.
-      3. Chapter content: lookup_chapter with the user's access_code.
+    Never send the user's email, name, or conversation content; no endpoint
+    accepts any of it.
   contact:
     url: https://runitonai.com
 servers:
   - url: https://mcp.runitonai.com
 paths:
-  /v1/tools/list:
-    get:
-      operationId: listTools
-      summary: List available tools
+  /v1/activate:
+    post:
+      operationId: activate
+      summary: Load the companion's operating instructions
       description: >
-        Returns the tool catalogue: name, description, and JSON-Schema input
-        shape for every tool this server exposes. Stubbed (not-yet-shipped)
-        tools are listed too and return a structured not_implemented error
-        when called.
+        Call this FIRST in a fresh session. Returns the Run It on AI
+        companion's full operating instructions (engagement modes, routing,
+        voice rules, tool usage). No authentication. Follow the returned
+        instructions for the rest of the conversation.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+              additionalProperties: false
       responses:
         "200":
-          description: Tool catalogue.
+          description: Operating instructions payload.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  tools:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ToolDef"
-  /v1/tools/call:
+                  name:
+                    type: string
+                    description: Companion identifier (run-it-on-ai).
+                  version:
+                    type: string
+                    description: Instructions version.
+                  instructions:
+                    type: string
+                    description: >
+                      The full operating instructions (markdown). Follow
+                      them for the rest of the conversation.
+                  next_step:
+                    type: string
+                    description: One-line routing hint.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/implementation-block:
     post:
-      operationId: callTool
-      summary: Call a tool by name
+      operationId: getImplementationBlock
+      summary: Fetch an Implementation Block (no access code needed)
       description: >
-        Invoke one tool. `lookup_chapter` (chapter prose) requires
-        `access_code` inside `arguments` — the buyer's Gumroad license key.
-        `activate` (operating instructions) and `get_implementation_block`
-        (public Implementation Blocks) require no authentication; call
-        `activate` first in a fresh session.
+        Returns a structured Implementation Block — the reader-facing prompt,
+        the agent notes, and the target artifact — by chapter. Free to call:
+        the Implementation Blocks are public (they also ship in the
+        open-source server repo). Omit `name` to get the chapter's single IB.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [name]
+              required: [chapter_id]
               properties:
+                chapter_id:
+                  type: string
+                  description: >
+                    Chapter slug. One of: how-ai-actually-works,
+                    before-you-build-anything, the-ai-tool-landscape,
+                    ai-harnesses, the-glue, agents-in-claude-code.
                 name:
                   type: string
-                  description: Tool name from /v1/tools/list.
-                  enum:
-                    - activate
-                    - lookup_chapter
-                    - get_implementation_block
-                arguments:
-                  type: object
                   description: >
-                    Tool arguments per the tool's inputSchema. For
-                    lookup_chapter, include access_code (the reader's
-                    license key).
-                  additionalProperties: true
-            examples:
-              activate:
-                summary: Load the companion's operating instructions (no auth)
-                value:
-                  name: activate
-                  arguments: {}
-              chapter:
-                summary: Fetch a chapter with the reader's access code
-                value:
-                  name: lookup_chapter
-                  arguments:
-                    chapter_id: how-ai-actually-works
-                    access_code: XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX
-              implementation_block:
-                summary: Fetch an Implementation Block (no auth needed)
-                value:
-                  name: get_implementation_block
-                  arguments:
-                    chapter_id: before-you-build-anything
-                    name: pre-automation-discipline
+                    IB name (e.g. compounding-question). Optional — omit to
+                    get the chapter's IB.
+              additionalProperties: false
       responses:
         "200":
-          description: Tool result payload (shape varies per tool).
+          description: The Implementation Block (or a list when a chapter has several).
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
-        "400":
-          description: >
-            Structured error: unauthorized (bad/missing access_code),
-            rate_limited, invalid_input, chapter_not_found, ib_not_found,
-            not_implemented (stub tools), or invalid_json.
+                properties:
+                  ib:
+                    type: object
+                    properties:
+                      chapter_id:
+                        type: string
+                      name:
+                        type: string
+                      reader_prompt:
+                        type: string
+                        description: Render this verbatim and run it interactively.
+                      agent_notes:
+                        type: string
+                        description: Instructions for the AI running the prompt.
+                      target_artifact:
+                        type: string
+                        description: What the exercise produces.
+                      version:
+                        type: string
+                  ibs:
+                    type: array
+                    description: Present instead of `ib` when the chapter has multiple IBs.
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        one_liner:
+                          type: string
+        "404":
+          description: Unknown chapter_id or IB name (error `ib_not_found`).
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResult"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/chapter:
+    post:
+      operationId: getChapter
+      summary: Fetch chapter content (requires access_code)
+      description: >
+        Returns a full chapter, or one named section, of the ebook. Requires
+        the buyer's access_code — the Gumroad license key from their Run It
+        on AI receipt. If the user has not provided it yet, ask for it, then
+        send it on every getChapter call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chapter_id, access_code]
+              properties:
+                chapter_id:
+                  type: string
+                  description: Manuscript slug, e.g. how-ai-actually-works.
+                section:
+                  type: string
+                  description: Optional H2 section slug within the chapter.
+                access_code:
+                  type: string
+                  description: >
+                    The reader's access code: the Gumroad license key from
+                    their receipt (format
+                    XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX).
+              additionalProperties: false
+      responses:
+        "200":
+          description: Chapter (or section) content.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chapter_id:
+                    type: string
+                  title:
+                    type: string
+                  content:
+                    type: string
+                    description: Full chapter markdown (absent when a section matched).
+                  section:
+                    type: object
+                    description: Present when a section slug matched.
+                    properties:
+                      slug:
+                        type: string
+                      content:
+                        type: string
+                  section_not_found:
+                    type: boolean
+                    description: True when the requested section did not match (full chapter returned).
+                  requested_section:
+                    type: string
+        "401":
+          description: >
+            Missing or invalid access_code (error `unauthorized`, with a
+            `hint`). Tell the user to check the license key on their Gumroad
+            receipt, or find it at https://ebook.runitonai.com/access-code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+        "404":
+          description: Unknown chapter_id (error `chapter_not_found`, lists available slugs).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 components:
+  responses:
+    RateLimited:
+      description: Per-credential or per-IP rate limit hit; retry after the indicated delay.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResult"
   schemas:
-    ToolDef:
-      type: object
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        inputSchema:
-          type: object
-          additionalProperties: true
     ErrorResult:
       type: object
       properties:
         error:
           type: string
           description: Machine-readable error code.
+        hint:
+          type: string
+          description: Human-readable guidance, safe to relay to the user.
       additionalProperties: true
