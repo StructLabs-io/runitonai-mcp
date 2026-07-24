@@ -38,6 +38,12 @@ export const BOOK_PRODUCT_ID = "Q63DERDJWVQf8NHNciZ8lA==";
 export const BOOK_PERMALINK = "eypmtx";
 
 const LICENSE_KV_PREFIX = "license:";
+// Email-hash -> plaintext license key mapping, written by the resource-
+// subscription mirror and read by the site Worker's "Find my access code"
+// page (site/src/worker.ts uses the same literal prefix — keep in sync).
+// License keys are purchase identifiers, not PII; the email side stays
+// hashed, so no plaintext email is ever stored.
+export const EMAIL_LICENSE_KV_PREFIX = "lk-email:";
 const CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h — revocation propagation bound
 // Live Gumroad verifies per key hash per hour. Cache hits don't count, so a
 // legitimate reader spends at most ~1/day; this only throttles guessing.
@@ -206,9 +212,15 @@ export async function mirrorLicenseEvent(env: Env, params: URLSearchParams): Pro
     return "ignored (malformed license_key)";
   }
 
+  // Buyer email, when the payload carries one — feeds the email->key mapping
+  // behind the reader's "Find my access code" page.
+  const email = (params.get("email") || "").trim().toLowerCase();
+  const emailMapKey =
+    email && email.includes("@") ? EMAIL_LICENSE_KV_PREFIX + (await sha256Hex(email)) : null;
+
   // Refund / dispute / cancellation events revoke: drop the cache entry so
   // the next use falls through to live verify, which fails closed on the
-  // refunded/chargebacked flags.
+  // refunded/chargebacked flags. The email->key mapping goes with it.
   const resourceName = params.get("resource_name") || "";
   const isRevocation =
     params.get("refunded") === "true" ||
@@ -218,6 +230,7 @@ export async function mirrorLicenseEvent(env: Env, params: URLSearchParams): Pro
     resourceName === "cancellation";
   if (isRevocation) {
     await env.BUYERS.delete(await licenseKvKey(normalized));
+    if (emailMapKey) await env.BUYERS.delete(emailMapKey);
     return "ok (license revoked)";
   }
 
@@ -232,5 +245,18 @@ export async function mirrorLicenseEvent(env: Env, params: URLSearchParams): Pro
     normalized,
     saleId ? `resource_subscription:${saleId}` : "resource_subscription",
   );
+  // Permanent (no TTL): the mapping is display data for the buyer's own
+  // account page, revoked explicitly on refund events above.
+  if (emailMapKey) {
+    await env.BUYERS.put(
+      emailMapKey,
+      JSON.stringify({
+        license_key: normalized,
+        sale_id: saleId || undefined,
+        source: "resource_subscription",
+        cached_at: new Date().toISOString(),
+      }),
+    );
+  }
   return "ok (license mirrored)";
 }
