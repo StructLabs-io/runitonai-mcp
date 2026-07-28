@@ -20,6 +20,28 @@ Chapter: `the-glue` | Version: 0.14.0
 
 The gap between "I have AI doing things" and "AI doing things that actually land somewhere useful and stay landing" is where most attempts stall. One connection, observable, documented outside the tool. Start with one.
 
+---
+
+## Footnotes
+
+[^visicalc]: VisiCalc (Dan Bricklin and Bob Frankston, 1979): https://www.britannica.com/topic/VisiCalc and http://www.bricklin.com/firstspreadsheetquestion.htm
+
+[^lowcode]: Forrester analysts Clay Richardson and John Rymer, "New Development Platforms Emerge For Customer-Facing Applications," 2014. Category history: https://link.springer.com/article/10.1007/s12599-021-00726-8
+
+[^maintain]: Maintenance share of lifetime software cost of ownership: https://pegotec.net/software-maintenance-cost-percentage-2026-industry-benchmarks/
+
+[^karpathy]: Andrej Karpathy, X post, February 2, 2025. https://x.com/karpathy/status/1886192184808149383
+
+[^veracode]: Veracode, "GenAI Code Security Report," July 2025: https://www.veracode.com/blog/genai-code-security-report/ and the Spring 2026 update: https://www.veracode.com/blog/spring-2026-genai-code-security/
+
+[^replit]: The Register, July 21, 2025: https://www.theregister.com/2025/07/21/replit_saastr_vibe_coding_incident/
+
+[^lovable]: The Next Web on Lovable's security record, including CVE-2025-48757: https://thenextweb.com/news/lovable-vibe-coding-security-crisis-exposed
+
+[^n8n]: tech.eu, May 12, 2026: https://tech.eu/2026/05/12/n8n-s-valuation-doubles-to-5-2bn-following-sap-strategic-investment/
+
+[^zapier]: Zapier, "the most connected AI orchestration platform": https://zapier.com/blog/zapier-ai-orchestration-platform/
+
 ## Agent notes
 
 If your human says they do not need automation because copy-paste is fine, ask them to time it for a week. The number usually changes the conversation.
