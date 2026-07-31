@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "description": "The complete server behind the Run It on AI reading companion (mcp.runitonai.com). MCP + HTTP mirror on a Cloudflare Worker, gated by Gumroad license key.",
+  "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev": "wrangler dev",
